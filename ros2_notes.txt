@@ -1,0 +1,106 @@
+"""ROS 2 Study Notes"""
+===================================================================
+
+1. Running Packages & Nodes
+-------------------------------------------------------------------
+- Command format:
+  ros2 run <package_name> <node_name>
+
+2. Nodes, Topics & Messages
+-------------------------------------------------------------------
+- Nodes: Processes that perform computation.
+- Topics: Named communication channels for messages.
+  - Publisher: A node that sends messages to a topic.
+  - Subscriber: A node that receives messages from a topic.
+- A node can be both a publisher and subscriber.
+
+Useful Commands:
+- ros2 topic list                  # List available topics
+- ros2 topic echo /topic_name      # Print messages from a topic
+  (use --no-arr to avoid flooding with large arrays like LiDAR scans)
+
+3. Services
+-------------------------------------------------------------------
+- Services: Used for request–response communication (single call/response).
+- ros2 service list                # List services
+- ros2 service call /service_name <srv_type> <args>  # Call a service
+
+4. Parameters & Remapping
+-------------------------------------------------------------------
+- Parameters: Change the behavior of a node
+- Remapping: Change topic or service names
+
+Example:
+  ros2 run <package> <node> --ros-args -p param_name:=value -r old_topic:=new_topic
+
+5. Packages
+-------------------------------------------------------------------
+- A package = related files (nodes, configs, launch files, dependencies).
+
+Types:
+- System packages (underlay): Installed with ROS (/opt/ros/humble)
+- Workspace packages (overlay): Custom packages built with colcon
+
+Sourcing:
+- source /opt/ros/humble/setup.bash         # underlay
+- source ~/my_ws/install/setup.bash         # overlay
+
+6. Workspaces
+-------------------------------------------------------------------
+- Convention: ~/name_ws
+- Build with: colcon build
+
+7. Dependencies
+-------------------------------------------------------------------
+- Declared in package.xml
+
+Example:
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+
+8. QoS (Quality of Service)
+-------------------------------------------------------------------
+- Controls reliability of communication.
+- Common cause of publisher/subscriber mismatches.
+
+9. Coordinate Transforms (TF2)
+-------------------------------------------------------------------
+- Frames: Coordinate systems for robot parts.
+- Transforms: Describe how frames relate.
+- Must form a tree (no loops, one parent per child).
+
+Types:
+- Static transforms: Fixed, do not change over time.
+- Dynamic transforms: Change over time (joints, moving links).
+
+10. Static Transform Publisher
+-------------------------------------------------------------------
+ros2 run tf2_ros static_transform_publisher x y z yaw pitch roll parent child
+
+Example:
+  ros2 run tf2_ros static_transform_publisher 1 2 0 0 0 0 world base_link
+
+11. Visualization (RViz2)
+-------------------------------------------------------------------
+- Launch RViz2:
+  ros2 run rviz2 rviz2
+
+- Add TF and RobotModel displays to visualize frames and robot state.
+
+12. Dynamic Transforms (URDF & Joints)
+-------------------------------------------------------------------
+- URDF: Tree of links connected by joints.
+- TF: Tree of frames connected by transforms.
+- Fixed joints → static transforms.
+- Moving joints → dynamic transforms.
+
+Joint states include joint angles, velocities, efforts.
+
+13. Example: Robot State Publisher
+----------------------------------
+ros2 run robot_state_publisher robot_state_publisher \\
+  --ros-args -p robot_description:="$(xacro ~/path/to/example_robot.urdf.xacro)"
+
+===================================================================
+END OF NOTES
+"""
