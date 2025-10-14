@@ -1,0 +1,14 @@
+build/
+install/
+log/
+*.pyc
+__pycache__/
+*.swp
+.DS_Store
+*.bag
+*.log
+*.rviz~
+
+
+# ignore nested repo
+src/my_bot/

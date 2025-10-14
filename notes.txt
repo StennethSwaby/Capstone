@@ -1,0 +1,91 @@
+***running packages in Ros2***
+ros2 Name_of_package Name_of_node
+
+
+***Nodes***
+they communicate via topics and messages
+The topic is name location that the node can publish a message to ( publisher), the another node can subscribe to that locatiion to read the message these are called (subscribers). Node can be both publiosher and subscribers.
+
+(ros2 topic list)It is import to list the avalible topics !
+(ros2 topic echo /topic_name )It is also important to see the topics that are bing subscribes to !
+note"--no-arr" this will prevent array data like the lidar scans for being continusly printed.
+
+***Services***
+ros2 service list => Shows the services that are avalible
+ros2 service call /service_name => Calles the service that you want
+
+service are diffrent form node in that they do not perfor continue us function, the take and empty message in and performs a task so emty message out or for example stopping the lidar motor.
+
+***Parameters and Remapping***
+Parameters == change the behavior of the node
+Remapping == changes the name of topics or services
+Ros args -p parameters -r remapping
+
+***Packages****
+I short a whole bunch of related files with dependences, normally consisting of nodes and launch files.
+---System_packages---
+These are a list of paths that the computer check to see if it can find the path to what you are tryiyng to accomplish.
+-----------------------------------------------------------------
+sourcing you instalation
+e.g.
+	source /opt/ros/humble/setup.bash
+this is ment as the underlay
+----------------------------------------------------------------
+***The_Work_Space***
+colcon builds to you work space and helps the system find you packaegs, this is also known and the overlay. This is because this gose over the underlay.We dont want o automaticay sourec the overly because we want to keep each work space separate.
+
+***QOS/Quality_Of_Service***
+This is normally the cause of a whole tot of issues that someone can run into.......
+
+***The_work_Space***
+The convention for your wowrk space is to keep it in the Home foulder, ans name it Name_ws.
+
+@@@Dependencies@@@
+the dependencies are onter packages the our package relies on the operate.
+
+***Coordinate_Transforms***
+(transfor)
+-these are normally called frames
+-The dirrection are Red in used in the x direction
+-Green in used for the y direction
+
+Trans_forms are used to change for one frmato the next and transforms can even be used back words. As long as there is a continus line of transforms between them.
+
+To avoide conflicts we want our transforms to form a tree structure
+with respecto only one other frame no closed loops.
+
+-TF2- this is the ROS trans_form system 
+
+When a node broadcast to the Trans_forms it can be: 
+__Static__:This means it dose not change overtime 
+__Dinamic__:This means that it will change over time
+
+Broadcasting/Listening -- this is the TF2 - version of publishing and subscribing.
+
+***Static_Trans_Form_Publisher***
+this only publishes static transforms not dinamic ones
+------------------------------------------------------------------
+ros2 run tf2_ros static_transform_publisher x y z pitch roll parent_frame child_frame
+--------------------------------------------------------------------
+ros2 run tf2_ros static_transform_publisher 1 2 0 0 0 0 world base_link //// this is the test it real world 
+
+
+***R_Vis***
+ros2 run rviz2 rviz2
+
+***Dynamic Transforms***
+The URDF - A tree of (Links) connected by (Joints)
+TF a tree of (Frames) connected by (Transforms)
+
+Fixed joints at publised with a (static transform) and the joints that arfe mpoving are published with a (dynamic transform)
+
+Joint states these send joint state messages that contain the angle and velocity of the joints or the efforts of the joints.
+
+ ***demo***
+ros2 run robot_state_publisher robot_state_publisher \
+  --ros-args -p robot_description:="$(xacro ~/path/to/example_robot.urdf.xacro)"
+
+
+
+-------------------------------------------------------------------
+
