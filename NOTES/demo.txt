@@ -1,0 +1,7 @@
+***Headless (stable while debugging)***
+ros2 launch slam_toolbox_bringup slam_toolbox_sim.launch.py
+***GUI with software GL (slower but stable)***
+ros2 launch slam_toolbox_bringup slam_toolbox_sim.launch.py gui:=true force_software_gl:=true
+***Normal GUI (once drivers behave)***
+ros2 launch slam_toolbox_bringup slam_toolbox_sim.launch.py gui:=true
+
