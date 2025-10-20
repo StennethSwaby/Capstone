@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cartographer_bringup</name>
+  <version>0.0.1</version>
+  <description>Bringup for Cartographer (2D) with your robot/sim</description>
+  <maintainer email="swabys1@tcnj.edu">stenneth</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>cartographer_ros</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>gazebo_ros</exec_depend> <!-- if you spawn in Gazebo -->
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+

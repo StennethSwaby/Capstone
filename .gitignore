@@ -1,14 +1,33 @@
+# ROS 2 / colcon build outputs
 build/
 install/
 log/
-*.pyc
-__pycache__/
-*.swp
-.DS_Store
-*.bag
-*.log
+.colcon/
+colcon_build/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+
+# Editor/IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Gazebo & RViz temp/backup files
+*.world~
 *.rviz~
+*.urdf~
+*.xacro~
 
+# Map artifacts ONLY (don't ignore all YAMLs!)
+map.pgm
+map.yaml
+*.bt
 
-# ignore nested repo
-src/my_bot/
+# Generic temp & swap
+*.swp
+*.swo
+*.bak
+*.tmp
+*.log
