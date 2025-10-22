@@ -1,0 +1,146 @@
+==============================
+TurtleBot3 + SLAM Toolbox — Step‑by‑Step Commands
+==============================
+
+# SECTION A — ROBOT (TurtleBot3 PC)
+# Open a terminal on the robot (or SSH in) and run:
+
+# 1) ROS env + TB3 model (adjust distro/model if needed)
+source /opt/ros/foxy/setup.bash
+export TURTLEBOT3_MODEL=burger        # or: waffle / waffle_pi
+export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0
+
+# 2) Start the robot bringup (sensors, base, TF)
+ros2 launch turtlebot3_bringup robot.launch.py
+
+# (Leave this running)
+
+
+
+# SECTION B — DESKTOP/LAPTOP (Visualization + SLAM)
+# Open a terminal on your desktop and run:
+
+# 1) ROS env (adjust distro if needed) + network discovery
+source /opt/ros/humble/setup.bash
+# If you have a workspace:
+# source ~/Research_ws/install/setup.bash
+export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0
+
+# 2) Start SLAM Toolbox + RViz2 with your working launch
+ros2 launch slam_toolbox_bringup slam_toolbox_robot.launch.py \
+  use_sim_time:=false base_frame:=base_footprint scan_topic:=/scan
+
+# 3) (Optional) Teleop from desktop to move the robot
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+
+
+
+# SECTION C — SAVE THE MAP WHEN DONE
+# In a new desktop terminal:
+source /opt/ros/humble/setup.bash
+# source ~/Research_ws/install/setup.bash
+mkdir -p ~/maps
+ros2 run nav2_map_server map_saver_cli -f ~/maps/tb3_map
+
+
+
+# SECTION D — QUICK HEALTH CHECKS (run on desktop)
+# See that topics are visible from robot
+ros2 topic list | grep -E '^/scan$|^/map$|^/odom$|^/tf$'
+
+# Verify scans are arriving
+ros2 topic hz /scan
+ros2 topic echo -n1 /scan
+
+# Verify map is updating while moving
+ros2 topic hz /map
+ros2 topic echo -n1 /map
+
+# Confirm TF chain is present
+ros2 run tf2_tools view_frames   # opens frames.pdf afterwards
+
+
+
+# SECTION E — RViz QUICK TWEAKS (set inside RViz GUI)
+# Fixed Frame: map
+# Map display -> Topic: /map; QoS: Reliability=Reliable, Durability=Transient Local
+# LaserScan display -> Topic: /scan; QoS: Reliability=Best Effort
+
+==============================
+TurtleBot3 + SLAM Toolbox Setup Notes
+==============================
+
+SECTION 1 — HOW TO GET THE TURTLEBOT3 UP AND RUNNING WITH SLAM TOOLBOX
+-----------------------------------------------------------------------
+
+A. On the TurtleBot (Robot PC)
+1. Connect the robot to power and ensure the LiDAR (LDS) and Raspberry Pi/NUC are connected.
+2. SSH into the robot or open a terminal directly on it.
+3. Set up environment variables:
+   export TURTLEBOT3_MODEL=burger        # or waffle / waffle_pi
+   export ROS_DOMAIN_ID=0
+   export ROS_LOCALHOST_ONLY=0
+4. Launch the TurtleBot3 bringup:
+   ros2 launch turtlebot3_bringup robot.launch.py
+   - This starts the base motors, IMU, and LiDAR (hlds_laser_publisher).
+   - You should see messages like:
+     Succeeded to open the port(/dev/ttyACM0)!
+     Run!
+5. Verify sensors are publishing:
+   ros2 topic list | grep scan
+   You should see /scan in the list.
+
+
+B. On the Desktop (Your Laptop)
+1. Make sure you’re on the same Wi-Fi network as the robot.
+2. In your terminal:
+   export ROS_DOMAIN_ID=0
+   export ROS_LOCALHOST_ONLY=0
+3. Launch SLAM Toolbox with the working custom launch file:
+   ros2 launch slam_toolbox_bringup slam_toolbox_robot.launch.py \
+     use_sim_time:=false base_frame:=base_footprint scan_topic:=/scan
+   - This starts SLAM Toolbox (async_slam_toolbox_node) and RViz2 automatically.
+   - You should see the map forming dynamically as the robot moves.
+4. Start keyboard teleoperation (optional):
+   ros2 run teleop_twist_keyboard teleop_twist_keyboard
+   - Use the keys i, j, k, l, etc., to move the robot.
+5. When mapping is complete, save the map:
+   ros2 run nav2_map_server map_saver_cli -f ~/maps/tb3_map
+   This generates tb3_map.pgm and tb3_map.yaml.
+
+
+C. RViz2 Configuration Checklist
+- Fixed Frame: map
+- Add:
+  - TF
+  - Map → Topic: /map → QoS: Reliable + Transient Local
+  - LaserScan → Topic: /scan → QoS: Best Effort
+- (Optional) Add RobotModel and Odometry for visualization.
+- Make sure the map is gray/white (Color Scheme = map, Alpha = 1.0).
+- As you move the robot, the map should grow dynamically.
+
+
+SECTION 2 — WHAT I WORKED ON TODAY
+-----------------------------------
+Objective: Get the TurtleBot3 running with SLAM Toolbox and RViz2 for live mapping on real hardware.
+
+Main Tasks Completed:
+1. Created and fixed a new launch file named slam_toolbox_robot.launch.py in slam_toolbox_bringup/launch/.
+   - Added arguments for use_sim_time, base_frame, and scan_topic.
+   - Integrated both SLAM Toolbox and RViz2 nodes in one launch file.
+   - Defaulted use_sim_time:=false for real-world use (instead of Gazebo).
+2. Verified SLAM Toolbox receives live LiDAR data (/scan) and odometry.
+3. Adjusted RViz2 QoS and fixed the “map is red” issue by setting:
+   - Color Scheme = map
+   - Reliability = Reliable
+   - Durability = Transient Local
+4. Ensured the map dynamically updates by setting SLAM mode to mapping and confirming /map publishes continuously.
+5. Tested communication between the robot (running ROS Foxy) and laptop (running ROS Humble) with matching ROS_DOMAIN_ID and open network discovery.
+6. Final verified command that worked:
+   ros2 launch slam_toolbox_bringup slam_toolbox_robot.launch.py \
+     use_sim_time:=false base_frame:=base_footprint scan_topic:=/scan
+
+Result:
+The TurtleBot3 now runs SLAM Toolbox successfully on the real robot, producing a live, dynamically updating map visible in RViz2.
