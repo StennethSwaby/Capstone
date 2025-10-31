@@ -1,8 +1,12 @@
 <?xml version="1.0"?>
-<robot xmlns:xacro="http://www.ros.org/wiki/xacro"  name="robot">
-    
-    <xacro:include filename="robot_core.xacro"/>
-    <xacro:include filename="gazebo_control.xacro"/>
-    <xacro:include filename="lidar.xacro"/>    
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="robot">
+
+  <!-- Use absolute includes so installed paths work reliably -->
+  <xacro:include filename="$(find cartographer_bringup)/description/robot_core.xacro"/>
+  <xacro:include filename="$(find cartographer_bringup)/description/gazebo_control.xacro"/>
+  <xacro:include filename="$(find cartographer_bringup)/description/lidar.xacro"/>
+
+  <!-- If your included xacros define macros/args, instantiate/set them here.
+       (Your current files just define links/joints/materials, so nothing else is needed.) -->
 
 </robot>

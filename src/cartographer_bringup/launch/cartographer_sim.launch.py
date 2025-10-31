@@ -1,70 +1,81 @@
-#!/usr/bin/env python3
-import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Command, FindExecutable
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
-import xacro
+import os
 
 def generate_launch_description():
     pkg = 'cartographer_bringup'
+    
+    world_arg = DeclareLaunchArgument(
+        'world',
+        default_value=PathJoinSubstitution([FindPackageShare(pkg), 'worlds', 'obstacles.world'])
+    )
+    use_sim_time_arg = DeclareLaunchArgument('use_sim_time', default_value='true')
+    configuration_basename_arg = DeclareLaunchArgument('configuration_basename', default_value='turtlebot3_lds_2d.lua')
+    rviz_config_arg = DeclareLaunchArgument(
+        'rviz_config',
+        default_value=PathJoinSubstitution([FindPackageShare(pkg), 'rviz', 'cartographer.rviz'])
+    )
 
+    world = LaunchConfiguration('world')
     use_sim_time = LaunchConfiguration('use_sim_time')
-    start_gazebo = LaunchConfiguration('start_gazebo')
-    start_rviz   = LaunchConfiguration('start_rviz')
+    configuration_basename = LaunchConfiguration('configuration_basename')
+    rviz_config = LaunchConfiguration('rviz_config')
 
-    declare_use_sim_time = DeclareLaunchArgument('use_sim_time', default_value='true')
-    declare_start_gazebo = DeclareLaunchArgument('start_gazebo', default_value='false')
-    declare_start_rviz   = DeclareLaunchArgument('start_rviz', default_value='true')
+    # IMPORTANT: add a literal space between xacro and file path
+    my_robot_xacro_path = PathJoinSubstitution([FindPackageShare(pkg), 'description', 'my_robot.xacro'])
+    robot_description = Command([FindExecutable(name='xacro'), ' ', my_robot_xacro_path])
 
-    share = get_package_share_directory(pkg)
-
-    # If you want to spawn your robot here, point to your xacro
-    # (or comment this block out if the robot is already running elsewhere)
-    # Example using your slam_toolbox_bringup’s my_robot.xacro:
-    try:
-        st_share = get_package_share_directory('slam_toolbox_bringup')
-        xacro_path = os.path.join(st_share, 'description', 'my_robot.xacro')
-        robot_description_xml = xacro.process_file(xacro_path).toxml()
-        rsp = Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            name='robot_state_publisher',
-            parameters=[{'robot_description': robot_description_xml, 'use_sim_time': use_sim_time}],
-            output='screen'
-        )
-        use_rsp = True
-    except Exception:
-        rsp = None
-        use_rsp = False
-
-    # Gazebo (optional)
-    world_path = PathJoinSubstitution([FindPackageShare('gazebo_ros'), 'worlds', 'empty.world'])
-    gazebo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')]),
-        condition=IfCondition(start_gazebo),
-        launch_arguments={'world': world_path}.items()
+    robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        parameters=[{'use_sim_time': use_sim_time, 'robot_description': robot_description}],
+        output='screen'
     )
 
-    spawn_entity = TimerAction(
-        period=2.0,
-        actions=[
-            Node(
-                condition=IfCondition(start_gazebo),
-                package='gazebo_ros',
-                executable='spawn_entity.py',
-                arguments=['-topic', 'robot_description', '-entity', 'carto_bot'],
-                output='screen'
-            )
-        ]
+    gz_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
+        ),
+        launch_arguments={'gz_args': world}.items()
     )
 
-    # Cartographer nodes
-    lua_file = os.path.join(share, 'config', 'cartographer_2d.lua')
+    set_resource_path = SetEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=os.pathsep.join(filter(None, [
+            os.getenv('GZ_SIM_RESOURCE_PATH', ''),
+            os.path.join(get_package_share_directory(pkg), 'worlds'),
+            os.path.join(get_package_share_directory(pkg), 'description'),
+        ]))
+    )
+
+    spawn_entity = Node(
+        package='ros_gz_sim',
+        executable='create',
+        name='spawn_entity',
+        arguments=['-topic', 'robot_description', '-name', 'my_robot', '-x', '0', '-y', '0', '-z', '0.1'],
+        output='screen'
+    )
+
+    # Adjust /world/<name>/... if your world name isn’t "default"
+    lidar_and_cmdvel_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='gz_bridge',
+        output='screen',
+        arguments=[
+            '/scan@sensor_msgs/msg/LaserScan@gz.msgs.LaserScan',
+            '/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist',
+        ],
+        remappings=[
+            ('/scan',    '/world/default/model/my_robot/link/laser_frame/sensor/laser/scan'),
+            ('/cmd_vel', '/model/my_robot/cmd_vel'),
+        ],
+    )
 
     cartographer_node = Node(
         package='cartographer_ros',
@@ -72,36 +83,37 @@ def generate_launch_description():
         name='cartographer_node',
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}],
-        arguments=['-configuration_directory', os.path.join(share, 'config'),
-                   '-configuration_basename', 'cartographer_2d.lua'],
-        remappings=[('/scan', '/scan')]  # change if your scan topic differs
+        arguments=[
+            '-configuration_directory', PathJoinSubstitution([FindPackageShare(pkg), 'config']),
+            '-configuration_basename', configuration_basename
+        ]
     )
 
     occupancy_grid_node = Node(
         package='cartographer_ros',
-        executable='occupancy_grid_node',
+        executable='cartographer_occupancy_grid_node',
         name='occupancy_grid_node',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time, 'resolution': 0.05, 'publish_period_sec': 1.0}]
+        parameters=[{'use_sim_time': use_sim_time}],
     )
 
-    # RViz (optional)
-    rviz_config = os.path.join(share, 'config', 'rviz_cartographer.rviz')
-    rviz = Node(
-        condition=IfCondition(start_rviz),
+    rviz2 = Node(
         package='rviz2',
         executable='rviz2',
         name='rviz2',
-        arguments=['-d', rviz_config] if os.path.exists(rviz_config) else [],
-        output='screen'
+        output='screen',
+        arguments=['-d', rviz_config],
+        parameters=[{'use_sim_time': use_sim_time}],
     )
 
-    nodes = [
-        declare_use_sim_time, declare_start_gazebo, declare_start_rviz,
-        gazebo, spawn_entity, cartographer_node, occupancy_grid_node, rviz
-    ]
-    if use_rsp and rsp is not None:
-        nodes.insert(3, rsp)
-
-    return LaunchDescription(nodes)
-
+    return LaunchDescription([
+        world_arg, use_sim_time_arg, configuration_basename_arg, rviz_config_arg,
+        set_resource_path,
+        gz_launch,
+        robot_state_publisher,
+        spawn_entity,
+        lidar_and_cmdvel_bridge,
+        cartographer_node,
+        occupancy_grid_node,
+        rviz2,
+    ])

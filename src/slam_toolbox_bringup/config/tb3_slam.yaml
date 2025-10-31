@@ -1,0 +1,14 @@
+slam_toolbox:
+  ros__parameters:
+    use_sim_time: false          # set true if in Gazebo
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_footprint   # TB3 commonly uses base_footprint
+    scan_topic: /scan
+    resolution: 0.05
+    minimum_time_interval: 0.5
+    transform_publish_period: 0.02
+    mode: mapping
+    loop_closure: true
+    do_loop_closing: true
+

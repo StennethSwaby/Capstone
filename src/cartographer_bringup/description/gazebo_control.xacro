@@ -1,29 +1,45 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-    
-    <gazebo>
-        <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
 
-            <!--wheel info-->
-            <left_joint>left_wheel_joint</left_joint>
-            <right_joint>right_wheel_joint</right_joint>
-            <wheel_separation>0.35</wheel_separation>
-            <wheel_diameter>0.1</wheel_diameter>
+  <!--
+    GZ / Ignition DiffDrive system.
+    NOTE: On Humble (Fortress/Garden), the shared object is usually:
+      libignition-gazebo-diff-drive-system.so
+    On newer GZ it may be:
+      libgz-sim-diff-drive-system.so
+    The one below works on Humble’s default GZ:
+  -->
+  <gazebo>
+    <plugin name="gz_diff_drive" filename="libignition-gazebo-diff-drive-system.so">
+      <!-- Joints -->
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
 
-            <!--limits-->
-            <max_wheel_torque>200</max_wheel_torque>
-            <max_wheel_acceleration>10.0</max_wheel_acceleration>
+      <!-- Geometry (must match your robot_core.xacro) -->
+      <wheel_separation>0.35</wheel_separation>
+      <wheel_radius>0.05</wheel_radius>
 
+      <!-- Limits -->
+      <max_linear_acceleration>10.0</max_linear_acceleration>
+      <max_angular_acceleration>10.0</max_angular_acceleration>
+      <max_linear_velocity>2.0</max_linear_velocity>
+      <max_angular_velocity>4.0</max_angular_velocity>
 
-            <!--output-->
-            <odometry_frame>odom</odometry_frame>
-            <robot_base_frame>base_link</robot_base_frame>
+      <!-- Command topic (GZ Transport). We'll bridge this to ROS /cmd_vel. -->
+      <topic>cmd_vel</topic>
 
-            <publish_odom>true</publish_odom>
-            <publish_odom_tf>true</publish_odom_tf>
-            <publish_wheel_tf>true</publish_wheel_tf>
+      <!-- Odometry output (GZ Transport). We'll bridge this to ROS /odom. -->
+      <odom_topic>odometry</odom_topic>
 
-        </plugin>
-    </gazebo>
+      <!-- Frames (used in odom message content; TF still comes from robot_state_publisher) -->
+      <odom_frame>odom</odom_frame>
+      <base_frame>base_link</base_frame>
+
+      <!-- Optional tweaks -->
+      <publish_odom>true</publish_odom>
+      <publish_tf>false</publish_tf>  <!-- keep false; TF comes from robot_state_publisher -->
+      <odometry_source>WHEEL</odometry_source>
+    </plugin>
+  </gazebo>
 
 </robot>
