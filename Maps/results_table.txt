@@ -1,0 +1,6 @@
+Algorithm    | Mean Map Error (px) | Mean Map Error (cm)* | Correlation Coefficient
+-------------+---------------------+----------------------+------------------------
+SLAM Toolbox | 18.91               | 94.56                | 0.068                  
+Cartographer | 32.46               | 162.29               | -0.020                 
+
+* cm/px used: 5.000
