@@ -1,0 +1,158 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <world name="maze_world">
+    <!-- lighting & ground -->
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <!-- ================================
+         Constants (documented for you)
+         ================================
+         Environment (meters):
+           Lx = 2.438    (length in X)
+           Ly = 1.3716   (width  in Y)
+         Wall thickness: 0.03
+         Wall/obstacle height: 0.3048 (1 ft)
+         A small inward "clearance" margin is used to place the interior boxes.
+    -->
+
+    <!-- ================================
+         Border walls (static)
+         ================================ -->
+    <model name="border_walls" static="true">
+      <pose>0 0 0 0 0 0</pose>
+      <link name="north_wall">
+        <pose>0 0.6858 0.1524 0 0 0</pose> <!-- z = H/2 -->
+        <collision name="col">
+          <geometry>
+            <box>
+              <size>2.438 0.03 0.3048</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>2.438 0.03 0.3048</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.9 0.9 0.9 1</diffuse>
+          </material>
+        </visual>
+      </link>
+
+      <link name="south_wall">
+        <pose>0 -0.6858 0.1524 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>2.438 0.03 0.3048</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>2.438 0.03 0.3048</size></box></geometry>
+        </visual>
+      </link>
+
+      <link name="west_wall">
+        <pose>-1.219 0 0.1524 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>0.03 1.3716 0.3048</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.03 1.3716 0.3048</size></box></geometry>
+        </visual>
+      </link>
+
+      <link name="east_wall">
+        <pose>1.219 0 0.1524 0 0 0</pose>
+        <collision name="col">
+          <geometry><box><size>0.03 1.3716 0.3048</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.03 1.3716 0.3048</size></box></geometry>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ================================
+         Obstacles (static boxes)
+         Dimensions you provided (meters):
+           box_1: 0.3937 x 0.4318
+           box_2: 0.3937 x 0.4318
+           box_3: 0.4445 x 0.2413  (tall, narrow)
+           box_4: 0.2921 x 0.2413
+         Notes:
+           - Poses are approximate from your diagram:
+             box_1 left interior, box_3 right interior (portrait),
+             box_2 centered near bottom, box_4 centered near top.
+           - Adjust X/Y below if you need exact offsets.
+    ================================ -->
+
+    <!-- Place boxes slightly in from the walls -->
+    <!-- helper values (comment): clearance ~ 0.20 m from nearest wall -->
+    <!-- z = 0.3048/2 to sit on ground -->
+
+    <model name="box_1" static="true">
+      <!-- left interior -->
+      <pose>-0.85 0.0 0.1524 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.3937 0.4318 0.3048</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.3937 0.4318 0.3048</size></box></geometry>
+          <material><diffuse>0.7 0.7 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_2" static="true">
+      <!-- near bottom center -->
+      <pose>0.0 -0.45 0.1524 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.3937 0.4318 0.3048</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.3937 0.4318 0.3048</size></box></geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_3" static="true">
+      <!-- right interior, portrait-oriented -->
+      <pose>0.95 0.0 0.1524 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.2413 0.4445 0.3048</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.2413 0.4445 0.3048</size></box></geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_4" static="true">
+      <!-- near top center -->
+      <pose>0.0 0.48 0.1524 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.2921 0.2413 0.3048</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.2921 0.2413 0.3048</size></box></geometry>
+        </visual>
+      </link>
+    </model>
+
+    <!-- friction tuned a bit “grippy” for TB3 Burger -->
+    <physics type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+  </world>
+</sdf>

@@ -1,27 +1,49 @@
 <?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd"
+            schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>controlled_env</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="stenneth.w.swaby@gmail.com">stenneth</maintainer>
-  <license>TODO: License declaration</license>
+  <version>0.1.0</version>
+  <description>
+    Controlled 2D/3D maze environment for TurtleBot3 experiments in ROS 2.
+    Provides a Gazebo world with 1-ft walls and movable obstacles, plus launch
+    files to bring up SLAM (SLAM Toolbox / Cartographer) and teleop.
+  </description>
 
+  <maintainer email="stenneth.w.swaby@gmail.com">Stenneth Swaby</maintainer>
+  <author email="stenneth.w.swaby@gmail.com">Stenneth Swaby</author>
+  <license>Apache-2.0</license>
+
+  <!-- Build tool -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>gazebo_ros</depend>
-  <depend>xacro</depend>
-  <depend>robot_state_publisher</depend>
-  <depend>turtlebot3_description</depend>
-  <depend>turtlebot3_gazebo</depend>
-  <depend>slam_toolbox</depend>
-  <depend>cartographer_ros</depend>
-  <depend>teleop_twist_keyboard</depend>
+  <!-- Runtime dependencies (launched/used at run time; not linked in CMake) -->
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
 
+  <!-- TurtleBot3 assets (URDFs, meshes, Gazebo configs) -->
+  <exec_depend>turtlebot3_description</exec_depend>
+  <exec_depend>turtlebot3_gazebo</exec_depend>
+
+  <!-- SLAM stacks (run from launch; no CMake link needed) -->
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>cartographer_ros</exec_depend>
+
+  <!-- Keyboard teleop (Python node; no CMake config exists) -->
+  <exec_depend>teleop_twist_keyboard</exec_depend>
+
+  <!-- Tests (optional) -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
+  <!-- Export -->
   <export>
     <build_type>ament_cmake</build_type>
+    <architecture_independent/>
+    <rosdoc config=""/>
+    <url type="website">https://github.com/yourname/controlled_env</url>
+    <url type="repository">https://github.com/yourname/controlled_env.git</url>
   </export>
 </package>
+

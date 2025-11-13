@@ -1,31 +1,18 @@
 cmake_minimum_required(VERSION 3.8)
 project(controlled_env)
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
-# find dependencies
+# Build system only. Do NOT find_package teleop_twist_keyboard here.
 find_package(ament_cmake REQUIRED)
-find_package(gazebo_ros REQUIRED)
-find_package(xacro REQUIRED)
-find_package(robot_state_publisher REQUIRED)
-find_package(turtlebot3_description REQUIRED)
-find_package(turtlebot3_gazebo REQUIRED)
-find_package(slam_toolbox REQUIRED)
-find_package(cartographer_ros REQUIRED)
-find_package(teleop_twist_keyboard REQUIRED)
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
+# If later you add C++ nodes, you'll add their find_package + executables.
+
+# Install your non-code assets (so launch/worlds/urdf show up in share/)
+install(DIRECTORY
+  launch
+  worlds
+  urdf
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()
