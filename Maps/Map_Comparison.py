@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import yaml
-from textwrap import dedent
+import csv
 
 # ============================================================
 # 0) Config you can tweak (safe defaults)
@@ -16,18 +16,21 @@ MAX_SHIFT = 15
 DEFAULT_CM_PER_PX = 5.0
 
 # Real-world maze size (meters) from your notes (used as a fallback scale estimator)
-# Testing environment: length 2.438 m, width 1.3716 m
+# Testing environment: length 2.438m, width 1.3716m
 MAZE_LENGTH_M = 2.438
 MAZE_WIDTH_M  = 1.3716
 
+# How many maps per algorithm to process (professor requested 10)
+N_PER_ALGO = 10
+
 # ============================================================
-# 1) I/O helpers (same as before, with a YAML parser added)
+# 1) I/O helpers
 # ============================================================
 
 def load_gray(path):
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     if img is None:
-        raise FileNotFoundError(f" Could not load file: {path}")
+        raise FileNotFoundError(f"Could not load file: {path}")
     return img
 
 def fit_and_center_to_canvas(img, canvas_size=(500, 500), bg=255):
@@ -35,7 +38,7 @@ def fit_and_center_to_canvas(img, canvas_size=(500, 500), bg=255):
     Scale image to fit inside canvas (keep aspect ratio), then center it on a white canvas.
     Works for any input size (bigger/smaller than canvas).
     """
-    Hc, Wc = canvas_size[1], canvas_size[0]  # careful: (w,h) vs shape
+    Wc, Hc = canvas_size
     h, w = img.shape[:2]
     # scale to fit (allow upscaling and downscaling)
     scale = min(Wc / w, Hc / h)
@@ -67,7 +70,7 @@ def try_read_yaml_resolution(img_path):
     return None
 
 # ============================================================
-# 2) Alignment helpers (same logic + tiny improvements)
+# 2) Alignment helpers (same logic as before)
 # ============================================================
 
 def binarize(img):
@@ -100,15 +103,13 @@ def rotate_image(img, angle_deg):
     M = cv2.getRotationMatrix2D((w//2, h//2), angle_deg, 1.0)
     return cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_NEAREST, borderValue=255)
 
-def center_image(binary_or_gray):
+def center_image(img):
     """
     Translate centroid to image center.
-    Works on binary or grayscale; uses binary moment if it's binary-like.
+    Works on binary or grayscale; uses binary moments.
     """
-    img = binary_or_gray
     h, w = img.shape[:2]
-    # Compute centroid using a binary mask (treat dark as background)
-    bin_img = binarize(img) if img.dtype != np.uint8 else binarize(img)
+    bin_img = binarize(img)
     M = cv2.moments(bin_img, binaryImage=True)
     if M['m00'] == 0:
         return img
@@ -187,46 +188,72 @@ def fine_align_by_translation(mov_img, ref_img, max_shift=15):
     return best
 
 # ============================================================
-# 3) Map-error metrics (edge-based symmetric Chamfer distance)
+# 3) Map-error metrics using YOUR FORMULA
 # ============================================================
 
-def edges(binary):
+def compute_map_error_with_formula(est_bin, gt_bin):
     """
-    Extract edges from a binary occupancy (white=walls/obstacles) using Canny.
+    ========================================================================
+    CRITICAL FUNCTION: MAP ERROR CALCULATION USING YOUR PROVIDED FORMULA
+    ========================================================================
+    
+    Computes map error using the formula:
+    
+    e_M = (1/N) * Σ sqrt((x_i - x_i^GT)^2 + (y_i - y_i^GT)^2)
+    
+    where:
+    - N is the number of edge pixels in the estimated map
+    - (x_i, y_i) are coordinates of edge pixels in the estimated map
+    - (x_i^GT, y_i^GT) are coordinates of corresponding nearest pixels in ground truth
+    
+    This function:
+    1) Extracts edge pixels from the estimated map (SLAM/Cartographer output)
+    2) Extracts edge pixels from the ground truth map
+    3) For each edge pixel in estimated map, finds nearest edge pixel in GT
+    4) Computes Euclidean distance between matched pairs
+    5) Returns the average (mean) of all these distances
+    
+    Parameters:
+    -----------
+    est_bin : numpy array
+        Binary estimated map (from SLAM algorithm)
+    gt_bin : numpy array
+        Binary ground truth map
+        
+    Returns:
+    --------
+    float : Map error e_M in pixels (mean distance per edge pixel)
     """
-    # Ensure binary is 0/255
-    b = (binary > 127).astype(np.uint8) * 255
-    e = cv2.Canny(b, 50, 150, L2gradient=True)
-    return e
-
-def mean_edge_distance(A_edges, B_edges):
-    """
-    Mean distance from each edge pixel in A to the nearest edge pixel in B (in pixels).
-    Uses a distance transform on the inverse of B_edges.
-    """
-    # Distance transform expects non-edges as positive domain.
-    # Create a mask where 0=edges, 255=non-edges, then run distanceTransform.
-    invB = np.where(B_edges > 0, 0, 255).astype(np.uint8)
-    distB = cv2.distanceTransform(invB, cv2.DIST_L2, 3)
-
-    # Sample distances at edge pixels of A
-    ys, xs = np.where(A_edges > 0)
-    if len(xs) == 0:
-        return 0.0
-    dists = distB[ys, xs]
-    return float(np.mean(dists))
-
-def symmetric_chamfer_mae(est_bin, gt_bin):
-    """
-    Symmetric mean surface distance (pixels):
-      ( mean_{p in edges(est)} d(p, edges(gt)) + mean_{q in edges(gt)} d(q, edges(est)) ) / 2
-    This implements the MAE-style feature-to-feature error used in your poster explanation.
-    """
-    E_est = edges(est_bin)
-    E_gt  = edges(gt_bin)
-    d_est_to_gt = mean_edge_distance(E_est, E_gt)
-    d_gt_to_est = mean_edge_distance(E_gt, E_est)
-    return 0.5 * (d_est_to_gt + d_gt_to_est)
+    
+    # STEP 1: Extract edges from both maps using Canny edge detection
+    # This identifies the walls/obstacles boundaries
+    est_edges = cv2.Canny((est_bin > 127).astype(np.uint8) * 255, 50, 150, L2gradient=True)
+    gt_edges = cv2.Canny((gt_bin > 127).astype(np.uint8) * 255, 50, 150, L2gradient=True)
+    
+    # STEP 2: Get coordinates of all edge pixels in estimated map
+    # These are our (x_i, y_i) points - N total points
+    yi_coords, xi_coords = np.where(est_edges > 0)
+    N = len(xi_coords)  # This is N in your formula
+    
+    if N == 0:
+        return 0.0  # No edges found, return zero error
+    
+    # STEP 3: Build distance transform of ground truth edges
+    # This allows us to quickly find distance to nearest GT edge pixel
+    # for any point in the image
+    inv_gt_edges = np.where(gt_edges > 0, 0, 255).astype(np.uint8)
+    dist_transform = cv2.distanceTransform(inv_gt_edges, cv2.DIST_L2, 3)
+    
+    # STEP 4: For each edge pixel (x_i, y_i) in estimated map,
+    # look up its distance to nearest GT edge pixel (x_i^GT, y_i^GT)
+    # This is the sqrt((x_i - x_i^GT)^2 + (y_i - y_i^GT)^2) term
+    distances = dist_transform[yi_coords, xi_coords]
+    
+    # STEP 5: Compute mean of all distances - this is (1/N) * Σ(...)
+    # This is your e_M formula result in pixels
+    e_M = float(np.mean(distances))
+    
+    return e_M
 
 # ============================================================
 # 4) Scale estimation (pixels -> centimeters)
@@ -243,14 +270,10 @@ def bbox_content_size(binary):
 def estimate_cm_per_px_from_drawn(drawn_bin):
     """
     Use drawn (ground truth) content bbox vs real maze size to estimate a pixels->cm scale.
-    We don't assume which side is length vs width; we compute both and average.
     """
     bw, bh = bbox_content_size(drawn_bin)  # in pixels
-    # Real dimensions in cm
     L_cm = MAZE_LENGTH_M * 100.0
     W_cm = MAZE_WIDTH_M  * 100.0
-    # Two possible orientation mappings; take the mean of the two implied scales
-    # (This is a reasonable compromise if we don't know which side aligned to which).
     scales = []
     if bw > 0:
         scales.append(L_cm / bw)
@@ -261,179 +284,310 @@ def estimate_cm_per_px_from_drawn(drawn_bin):
     scales = [s for s in scales if np.isfinite(s) and s > 0]
     if not scales:
         return None
-    # Median is robust to outliers
     return float(np.median(scales))
 
-def choose_cm_per_px(cart_yaml_mpp, slam_yaml_mpp, drawn_yaml_mpp, drawn_bin):
+def choose_cm_per_px(cart_mpp, slam_mpp, drawn_mpp, drawn_bin):
     """
     Priority:
-    1) If any YAML has 'resolution' (m/px), prefer the drawn map's, else average available.
+    1) If any YAML has 'resolution' (m/px), use the mean of available.
     2) Else estimate from drawn bbox and known maze dimensions.
     3) Else fall back to DEFAULT_CM_PER_PX.
     """
-    mpps = [x for x in [drawn_yaml_mpp, cart_yaml_mpp, slam_yaml_mpp] if x is not None]
+    mpps = [x for x in [drawn_mpp, cart_mpp, slam_mpp] if x is not None]
     if len(mpps) > 0:
         cm_per_px = float(np.mean(mpps) * 100.0)
         return cm_per_px
-    # Estimate from geometry
     est = estimate_cm_per_px_from_drawn(drawn_bin)
     if est is not None:
         return est
     return DEFAULT_CM_PER_PX
 
 # ============================================================
-# 5) Main (interactive)
+# 5) High-level processing helpers
 # ============================================================
 
-print("  Map Comparison, Alignment & Error Tool")
-print("----------------------------------------")
-cart_name  = input("Enter the filename for the Cartographer map: ").strip()
-slam_name  = input("Enter the filename for the SLAM Toolbox map: ").strip()
-drawn_name = input("Enter the filename for the Drawn (manual) map: ").strip()
+def preprocess_ground_truth(drawn_path):
+    """
+    Load, resize, normalize the drawn (manual) ground-truth map.
+    Returns gray_500, rot_gray, rot_bin.
+    """
+    drawn_raw = load_gray(drawn_path)
+    drawn_500 = fit_and_center_to_canvas(drawn_raw, (500, 500), bg=255)
+    drawn_rot, drawn_bin, drawn_ang = normalize(drawn_500)
+    cv2.imwrite("pre_drawn_500.png", drawn_500)
+    cv2.imwrite("aligned_drawn.png", drawn_rot)
+    return drawn_500, drawn_rot, drawn_bin, drawn_ang
 
-# Load original (grayscale)
-cart_raw  = load_gray(cart_name)
-slam_raw  = load_gray(slam_name)
-drawn_raw = load_gray(drawn_name)
+def process_group(file_list, ref_gray, ref_bin, algo_name, prefix):
+    """
+    For a set of N maps belonging to one algorithm (Cartographer or SLAM):
+      - Load, resize (500x500), normalize (rectangular alignment)
+      - Flip + fine-translate to align with the ground-truth reference
+      - Compute per-run map error e_M using YOUR FORMULA vs GT
+      - Stack aligned images and build an average map
 
-# Try to read sidecar YAML resolutions (meters/pixel)
-cart_mpp  = try_read_yaml_resolution(cart_name)
-slam_mpp  = try_read_yaml_resolution(slam_name)
-drawn_mpp = try_read_yaml_resolution(drawn_name)
+    Returns a dict with:
+      stack_gray, stack_bin, avg_gray, avg_bin, errors_px, corr_avg
+    """
+    stack_gray = []
+    stack_bin  = []
+    errors_px  = []
 
-# Force all to 500×500 centered canvases (keeps aspect ratio consistent)
-cart_500  = fit_and_center_to_canvas(cart_raw, (500, 500), bg=255)
-slam_500  = fit_and_center_to_canvas(slam_raw, (500, 500), bg=255)
-drawn_500 = fit_and_center_to_canvas(drawn_raw, (500, 500), bg=255)
+    print(f"\nProcessing {algo_name} maps...")
+    for idx, path in enumerate(file_list):
+        print(f"  [{algo_name}] Map {idx+1}/{len(file_list)}: {path}")
+        raw   = load_gray(path)
+        canvas = fit_and_center_to_canvas(raw, (500, 500), bg=255)
+        gray_norm, bin_norm, angle = normalize(canvas)
 
-# Save preprocessed versions (handy for debugging)
-cv2.imwrite("pre_cartographer_500.png", cart_500)
-cv2.imwrite("pre_slam_500.png", slam_500)
-cv2.imwrite("pre_drawn_500.png", drawn_500)
+        # Flip & align vs reference (ground truth)
+        best_bin, flip_name, corr0 = best_flip_to_match(bin_norm, ref_bin)
+        gray_flipped = apply_flip(gray_norm, flip_name)
 
-# Normalize orientation + center (still in 500×500 space)
-cart_rot, cart_bin, cart_ang   = normalize(cart_500)
-slam_rot, slam_bin, slam_ang   = normalize(slam_500)
-drawn_rot, drawn_bin, drawn_ang = normalize(drawn_500)
+        gray_aligned, dx, dy, corr = fine_align_by_translation(
+            gray_flipped, ref_gray, MAX_SHIFT
+        )
+        bin_aligned = translate_image(best_bin, dx, dy, border=255)
 
-# Flip SLAM & Drawn to best match Cartographer as reference
-_, slam_flip, slam_score0 = best_flip_to_match(slam_bin,  cart_bin)
-_, draw_flip, draw_score0 = best_flip_to_match(drawn_bin, cart_bin)
+        # Save per-run aligned maps if you want to inspect them
+        out_name = f"{prefix}_aligned_{idx+1}.png"
+        cv2.imwrite(out_name, gray_aligned)
 
-slam_aligned = apply_flip(slam_rot,  slam_flip)
-draw_aligned = apply_flip(drawn_rot, draw_flip)
+        # Compute map error e_M (in pixels) for this run using YOUR FORMULA
+        err_px = compute_map_error_with_formula(bin_aligned, ref_bin)
+        errors_px.append(err_px)
 
-slam_bin_aligned = apply_flip(slam_bin,  slam_flip)
-draw_bin_aligned = apply_flip(drawn_bin, draw_flip)
+        stack_gray.append(gray_aligned)
+        stack_bin.append(bin_aligned)
 
-# NEW: fine translation alignment (integer dx,dy search) for tighter overlay
-slam_aligned, slam_dx, slam_dy, slam_score = fine_align_by_translation(slam_aligned, cart_rot, MAX_SHIFT)
-draw_aligned, draw_dx, draw_dy, draw_score = fine_align_by_translation(draw_aligned, cart_rot, MAX_SHIFT)
+    stack_gray = np.stack(stack_gray, axis=0)
+    stack_bin  = np.stack(stack_bin, axis=0)
 
-slam_bin_aligned = translate_image(slam_bin_aligned, slam_dx, slam_dy, border=255)
-draw_bin_aligned = translate_image(draw_bin_aligned, draw_dx, draw_dy, border=255)
+    # Average map (grayscale)
+    avg_gray = np.mean(stack_gray, axis=0).astype(np.uint8)
 
-# Save outputs
-cv2.imwrite("aligned_cartographer.png", cart_rot)
-cv2.imwrite("aligned_slam.png",         slam_aligned)
-cv2.imwrite("aligned_drawn.png",        draw_aligned)
+    # Average occupancy (binary-ish) then re-threshold to 0/255
+    avg_bin_f = np.mean(stack_bin, axis=0)
+    avg_bin   = (avg_bin_f > 127).astype(np.uint8) * 255
 
-# Build overlay preview
+    # Correlation of average against ground truth
+    corr_avg = correlation(avg_bin, ref_bin)
+
+    # Save average map
+    cv2.imwrite(f"{prefix}_average.png", avg_gray)
+
+    return {
+        "stack_gray": stack_gray,
+        "stack_bin":  stack_bin,
+        "avg_gray":   avg_gray,
+        "avg_bin":    avg_bin,
+        "errors_px":  np.array(errors_px, dtype=np.float32),
+        "corr_avg":   corr_avg,
+    }
+
 def colorize(gray, channel):
+    """
+    Put grayscale image into one color channel (0=B,1=G,2=R) for overlays.
+    """
     c = np.zeros((gray.shape[0], gray.shape[1], 3), dtype=np.uint8)
     c[:, :, channel] = gray
     return c
 
-overlay = cv2.addWeighted(colorize(cart_rot, 0), 0.4, colorize(slam_aligned, 1), 0.4, 0)
-overlay = cv2.addWeighted(overlay, 1.0, colorize(draw_aligned, 2), 0.4, 0)
-cv2.imwrite("aligned_overlay_preview.png", cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB))
+def build_overlay(gt_gray, algo_avg_gray, name):
+    """
+    Overlay ground-truth (red) and algorithm average map (green) for visualization.
+    """
+    gt_c   = colorize(gt_gray, 2)      # red channel
+    algo_c = colorize(algo_avg_gray, 1)  # green channel
+    overlay = cv2.addWeighted(gt_c, 0.6, algo_c, 0.6, 0)
+    out_name = f"overlay_{name}_vs_groundtruth.png"
+    cv2.imwrite(out_name, cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB))
+    return overlay, out_name
 
-# ============================================================
-# 6) MAP ERROR (matches your poster's MAE intent)
-#     e_m ≈ symmetric mean distance between SLAM edges and GT edges
-# ============================================================
+def compute_stats(errors_px, cm_per_px):
+    """
+    Given array of e_M values (pixels), compute mean, variance, and MSE,
+    then convert to centimeters.
+    """
+    mean_px = float(np.mean(errors_px))
+    var_px  = float(np.var(errors_px))
+    mse_px  = float(np.mean(errors_px**2))
 
-# Choose cm-per-pixel scale
-cm_per_px = choose_cm_per_px(cart_mpp, slam_mpp, drawn_mpp, draw_bin_aligned)
+    mean_cm = mean_px * cm_per_px
+    var_cm  = var_px * (cm_per_px**2)
+    mse_cm  = mse_px * (cm_per_px**2)
 
-# Compute symmetric chamfer MAE vs ground-truth (Drawn) for each algorithm
-# Reference / ground truth:
-gt_bin = draw_bin_aligned
-
-cart_mae_px = symmetric_chamfer_mae(cart_bin, gt_bin)
-slam_mae_px = symmetric_chamfer_mae(slam_bin_aligned, gt_bin)
-
-cart_mae_cm = cart_mae_px * cm_per_px
-slam_mae_cm = slam_mae_px * cm_per_px
-
-# Recompute correlation vs GT (post fine-alignment) for reporting
-cart_corr_gt = correlation(cart_bin, gt_bin)
-slam_corr_gt = correlation(slam_bin_aligned, gt_bin)
-
-# ============================================================
-# 7) Print & save table for your poster's "RESULTS" box
-# ============================================================
-
-rows = [
-    ("SLAM Toolbox",   f"{slam_mae_px:0.2f}", f"{slam_mae_cm:0.2f}", f"{slam_corr_gt:0.3f}"),
-    ("Cartographer",   f"{cart_mae_px:0.2f}", f"{cart_mae_cm:0.2f}", f"{cart_corr_gt:0.3f}"),
-]
-
-col_names = ["Algorithm", "Mean Map Error (px)", "Mean Map Error (cm)*", "Correlation Coefficient"]
+    return {
+        "mean_px": mean_px,
+        "var_px":  var_px,
+        "mse_px":  mse_px,
+        "mean_cm": mean_cm,
+        "var_cm":  var_cm,
+        "mse_cm":  mse_cm,
+    }
 
 def format_table(rows, headers):
-    # simple monospace table
-    widths = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
-    def fmt_row(r): return " | ".join(s.ljust(widths[i]) for i, s in enumerate(r))
+    # simple monospace table for console + text file
+    widths = [max(len(h), *(len(str(r[i])) for r in rows)) for i, h in enumerate(headers)]
+    def fmt_row(r): return " | ".join(str(r[i]).ljust(widths[i]) for i in range(len(headers)))
     line = "-+-".join("-" * w for w in widths)
     out  = [fmt_row(headers), line]
     out += [fmt_row(r) for r in rows]
     return "\n".join(out)
 
-table_text = format_table(rows, col_names)
-print("\n=== RESULTS ===")
-print(table_text)
-print(f"\n* cm/px used: {cm_per_px:0.3f}  (Derived from YAML if present; otherwise estimated from maze size or default)")
-
-with open("results_table.txt", "w") as f:
-    f.write(table_text + f"\n\n* cm/px used: {cm_per_px:0.3f}\n")
-
-# Also save CSV for easy copy into spreadsheets
-import csv
-with open("results_table.csv", "w", newline="") as f:
-    w = csv.writer(f)
-    w.writerow(col_names)
-    for r in rows: w.writerow(r)
-
 # ============================================================
-# 8) Show panels (kept same, with minor title tweaks)
+# 6) Main
 # ============================================================
 
-fig, axs = plt.subplots(2, 3, figsize=(12, 8))
-axs = axs.ravel()
-axs[0].imshow(cart_500, cmap='gray');  axs[0].set_title("Cartographer (500×500)"); axs[0].axis('off')
-axs[1].imshow(slam_500, cmap='gray');  axs[1].set_title("SLAM (500×500)");        axs[1].axis('off')
-axs[2].imshow(drawn_500, cmap='gray'); axs[2].set_title("Drawn (500×500)");       axs[2].axis('off')
-axs[3].imshow(cart_rot, cmap='gray');  axs[3].set_title(f"Cart aligned (rot {cart_ang:.1f}°)"); axs[3].axis('off')
-axs[4].imshow(slam_aligned, cmap='gray'); axs[4].set_title(f"SLAM aligned (dx {slam_dx}, dy {slam_dy})"); axs[4].axis('off')
-axs[5].imshow(draw_aligned, cmap='gray'); axs[5].set_title(f"Drawn aligned (dx {draw_dx}, dy {draw_dy})"); axs[5].axis('off')
-plt.tight_layout()
-plt.show()
+def main():
+    print("  Multi-Run Map Comparison, Alignment & Error Tool")
+    print("---------------------------------------------------")
+    print(f"This script expects {N_PER_ALGO} Cartographer maps and {N_PER_ALGO} SLAM Toolbox maps.")
+    print("All maps will be resized to 500x500, normalized, aligned, and compared to a single ground-truth map.\n")
 
-# Final overlay
-plt.figure(figsize=(6,6))
-plt.title("Aligned Overlay (Blue=Cart, Green=SLAM, Red=Drawn)")
-plt.imshow(cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB))
-plt.axis('off')
-plt.show()
+    # ---- Ground truth (drawn) ----
+    drawn_name = input("Enter the filename for the Drawn (manual ground-truth) map: ").strip()
+    drawn_500, drawn_rot, drawn_bin, drawn_ang = preprocess_ground_truth(drawn_name)
 
-print("\nSaved files:")
-print(" - pre_cartographer_500.png")
-print(" - pre_slam_500.png")
-print(" - pre_drawn_500.png")
-print(" - aligned_cartographer.png")
-print(" - aligned_slam.png")
-print(" - aligned_drawn.png")
-print(" - aligned_overlay_preview.png")
-print(" - results_table.txt")
-print(" - results_table.csv")
+    # Try reading YAML resolution for ground truth
+    drawn_mpp = try_read_yaml_resolution(drawn_name)
+
+    # ---- Cartographer map filenames ----
+    cart_files = []
+    print(f"\nEnter filenames for {N_PER_ALGO} Cartographer maps:")
+    for i in range(N_PER_ALGO):
+        fname = input(f"  Cartographer map #{i+1}: ").strip()
+        if not fname:
+            raise ValueError("Filename cannot be empty. Please rerun and provide all filenames.")
+        cart_files.append(fname)
+
+    # ---- SLAM Toolbox map filenames ----
+    slam_files = []
+    print(f"\nEnter filenames for {N_PER_ALGO} SLAM Toolbox maps:")
+    for i in range(N_PER_ALGO):
+        fname = input(f"  SLAM Toolbox map #{i+1}: ").strip()
+        if not fname:
+            raise ValueError("Filename cannot be empty. Please rerun and provide all filenames.")
+        slam_files.append(fname)
+
+    # Read example YAML resolutions from the first map of each group (resolution is the same for all runs)
+    cart_mpp = try_read_yaml_resolution(cart_files[0]) if cart_files else None
+    slam_mpp = try_read_yaml_resolution(slam_files[0]) if slam_files else None
+
+    # Choose cm/px scale
+    cm_per_px = choose_cm_per_px(cart_mpp, slam_mpp, drawn_mpp, drawn_bin)
+    print(f"\nUsing scale: {cm_per_px:.3f} cm/pixel")
+
+    # ---- Process Cartographer group ----
+    cart_res = process_group(
+        file_list=cart_files,
+        ref_gray=drawn_rot,
+        ref_bin=drawn_bin,
+        algo_name="Cartographer",
+        prefix="cartographer"
+    )
+
+    # ---- Process SLAM group ----
+    slam_res = process_group(
+        file_list=slam_files,
+        ref_gray=drawn_rot,
+        ref_bin=drawn_bin,
+        algo_name="SLAM_Toolbox",
+        prefix="slam"
+    )
+
+    # ---- Compute statistics for map error e_M ----
+    cart_stats = compute_stats(cart_res["errors_px"], cm_per_px)
+    slam_stats = compute_stats(slam_res["errors_px"], cm_per_px)
+
+    # ---- Build overlays: average maps vs ground truth ----
+    cart_overlay, cart_overlay_name = build_overlay(drawn_rot, cart_res["avg_gray"], "cartographer_avg")
+    slam_overlay, slam_overlay_name = build_overlay(drawn_rot, slam_res["avg_gray"], "slam_avg")
+
+    # ---- Prepare table for console + file ----
+    headers = [
+        "Algorithm",
+        "Mean e_M (px)",
+        "Var(e_M) (px^2)",
+        "MSE(e_M^2) (px^2)",
+        "Mean e_M (cm)",
+        "Var(e_M) (cm^2)",
+        "MSE(e_M^2) (cm^2)",
+        "Corr(avg vs GT)"
+    ]
+
+    rows = [
+        [
+            "SLAM Toolbox",
+            f"{slam_stats['mean_px']:.3f}",
+            f"{slam_stats['var_px']:.3f}",
+            f"{slam_stats['mse_px']:.3f}",
+            f"{slam_stats['mean_cm']:.3f}",
+            f"{slam_stats['var_cm']:.3f}",
+            f"{slam_stats['mse_cm']:.3f}",
+            f"{slam_res['corr_avg']:.3f}",
+        ],
+        [
+            "Cartographer",
+            f"{cart_stats['mean_px']:.3f}",
+            f"{cart_stats['var_px']:.3f}",
+            f"{cart_stats['mse_px']:.3f}",
+            f"{cart_stats['mean_cm']:.3f}",
+            f"{cart_stats['var_cm']:.3f}",
+            f"{cart_stats['mse_cm']:.3f}",
+            f"{cart_res['corr_avg']:.3f}",
+        ],
+    ]
+
+    table_text = format_table(rows, headers)
+    print("\n=== RESULTS OVER 10 RUNS PER ALGORITHM ===")
+    print(table_text)
+    print(f"\n* e_M is the map error computed using formula: e_M = (1/N) * Σ sqrt((x_i - x_i^GT)^2 + (y_i - y_i^GT)^2)")
+    print(f"* Scale used: {cm_per_px:.3f} cm/pixel")
+    print(f"* MSE and Variance computed from the {N_PER_ALGO} individual run errors")
+
+    # Save results to TXT and CSV for your poster / reports
+    with open("results_table.txt", "w") as f:
+        f.write("Multi-run map comparison (10 runs each)\n\n")
+        f.write(table_text)
+        f.write(f"\n\n* e_M is the map error computed using formula: e_M = (1/N) * Σ sqrt((x_i - x_i^GT)^2 + (y_i - y_i^GT)^2)\n")
+        f.write(f"* Scale used: {cm_per_px:.3f} cm/pixel\n")
+        f.write(f"* MSE and Variance computed from the {N_PER_ALGO} individual run errors\n")
+
+    with open("results_table.csv", "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(headers)
+        for r in rows:
+            w.writerow(r)
+
+    # ---- Visual summary (plots) - ONLY showing overlays for inspection ----
+    # Two figures: Cartographer overlay and SLAM Toolbox overlay
+    
+    fig1, ax1 = plt.subplots(1, 1, figsize=(8, 8))
+    ax1.imshow(cv2.cvtColor(cart_overlay, cv2.COLOR_BGR2RGB))
+    ax1.set_title("Cartographer Average vs Ground Truth\n(Red=GT, Green=Cartographer)", fontsize=12)
+    ax1.axis('off')
+    plt.tight_layout()
+    
+    fig2, ax2 = plt.subplots(1, 1, figsize=(8, 8))
+    ax2.imshow(cv2.cvtColor(slam_overlay, cv2.COLOR_BGR2RGB))
+    ax2.set_title("SLAM Toolbox Average vs Ground Truth\n(Red=GT, Green=SLAM)", fontsize=12)
+    ax2.axis('off')
+    plt.tight_layout()
+    
+    plt.show()
+
+    print("\nSaved files:")
+    print(" - pre_drawn_500.png")
+    print(" - aligned_drawn.png")
+    print(" - cartographer_aligned_*.png (per-run aligned Cartographer maps)")
+    print(" - slam_aligned_*.png (per-run aligned SLAM maps)")
+    print(" - cartographer_average.png")
+    print(" - slam_average.png")
+    print(f" - {cart_overlay_name}")
+    print(f" - {slam_overlay_name}")
+    print(" - results_table.txt")
+    print(" - results_table.csv")
+
+if __name__ == "__main__":
+    main()

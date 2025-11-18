@@ -2,10 +2,13 @@ run:
 	python3 Map_Comparison.py
 
 clean:
-	rm aligned_cartographer.png \
-    aligned_slam.png \
-    aligned_drawn.png \
-    aligned_overlay_preview.png \
-    pre_cartographer_500.png \
-    pre_slam_500.png \
-    pre_drawn_500.png
+	rm -f pre_drawn_500.png \
+	aligned_drawn.png \
+	cartographer_aligned_*.png \
+	slam_aligned_*.png \
+	cartographer_average.png \
+	slam_average.png \
+	overlay_cartographer_avg_vs_groundtruth.png \
+	overlay_slam_avg_vs_groundtruth.png \
+	results_table.txt \
+	results_table.csv

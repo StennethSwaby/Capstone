@@ -1,6 +1,10 @@
-Algorithm    | Mean Map Error (px) | Mean Map Error (cm)* | Correlation Coefficient
--------------+---------------------+----------------------+------------------------
-SLAM Toolbox | 18.91               | 94.56                | 0.068                  
-Cartographer | 32.46               | 162.29               | -0.020                 
+Multi-run map comparison (10 runs each)
 
-* cm/px used: 5.000
+Algorithm    | Mean e_M (px) | Var(e_M) (px^2) | MSE(e_M^2) (px^2) | Mean e_M (cm) | Var(e_M) (cm^2) | MSE(e_M^2) (cm^2) | Corr(avg vs GT)
+-------------+---------------+-----------------+-------------------+---------------+-----------------+-------------------+----------------
+SLAM Toolbox | 19.294        | 7.207           | 379.448           | 96.468        | 180.167         | 9486.196          | 0.169          
+Cartographer | 25.227        | 5.517           | 641.909           | 126.134       | 137.918         | 16047.729         | 0.246          
+
+* e_M is the map error computed using formula: e_M = (1/N) * Σ sqrt((x_i - x_i^GT)^2 + (y_i - y_i^GT)^2)
+* Scale used: 5.000 cm/pixel
+* MSE and Variance computed from the 10 individual run errors
