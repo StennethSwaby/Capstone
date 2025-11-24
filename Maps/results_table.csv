@@ -1,3 +1,3 @@
-Algorithm,Mean e_M (px),Var(e_M) (px^2),MSE(e_M^2) (px^2),Mean e_M (cm),Var(e_M) (cm^2),MSE(e_M^2) (cm^2),Corr(avg vs GT)
-SLAM Toolbox,19.294,7.207,379.448,96.468,180.167,9486.196,0.169
-Cartographer,25.227,5.517,641.909,126.134,137.918,16047.729,0.246
+Algorithm,Mean e_M (px),Var(e_M) (px^2),MSE(e_M^2) (px^2),RMSE(e_M) (px),Mean e_M (cm),Var(e_M) (cm^2),MSE(e_M^2) (cm^2),RMSE(e_M) (cm),Corr(avg vs GT)
+SLAM Toolbox,19.294,7.207,379.448,19.479,96.468,180.167,9486.196,97.397,0.169
+Cartographer,25.227,5.517,641.909,25.336,126.134,137.918,16047.729,126.680,0.246

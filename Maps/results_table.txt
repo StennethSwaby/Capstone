@@ -1,10 +1,54 @@
 Multi-run map comparison (10 runs each)
 
-Algorithm    | Mean e_M (px) | Var(e_M) (px^2) | MSE(e_M^2) (px^2) | Mean e_M (cm) | Var(e_M) (cm^2) | MSE(e_M^2) (cm^2) | Corr(avg vs GT)
--------------+---------------+-----------------+-------------------+---------------+-----------------+-------------------+----------------
-SLAM Toolbox | 19.294        | 7.207           | 379.448           | 96.468        | 180.167         | 9486.196          | 0.169          
-Cartographer | 25.227        | 5.517           | 641.909           | 126.134       | 137.918         | 16047.729         | 0.246          
+=== PER-RUN MAP ERRORS: CARTOGRAPHER ===
+Scale: 5.000 cm/pixel
+
+Run  Map filename                     e_M (px)   e_M (cm)    e_M (%)
+---------------------------------------------------------------------------
+  1  cartographer1_map.pgm              25.267    126.335       3.57
+  2  cartographer2_map.pgm              24.874    124.371       3.52
+  3  cartographer3_map.pgm              27.569    137.847       3.90
+  4  cartographer4_map.pgm              25.677    128.387       3.63
+  5  cartographer5_map.pgm              29.637    148.186       4.19
+  6  cartographer6_map.pgm              22.927    114.633       3.24
+  7  cartographer7_map.pgm              27.399    136.994       3.87
+  8  cartographer8_map.pgm              21.650    108.248       3.06
+  9  cartographer9_map.pgm              24.638    123.192       3.48
+ 10  cartographer10_map.pgm             22.629    113.147       3.20
+---------------------------------------------------------------------------
+Mean e_M                                25.227    126.134
+Var(e_M)                                 5.517    137.918
+MSE(e_M^2)                             641.909  16047.729
+RMSE(e_M)                               25.336    126.680
+Corr(avg vs GT)                          0.246
+
+=== PER-RUN MAP ERRORS: SLAM TOOLBOX ===
+Scale: 5.000 cm/pixel
+
+Run  Map filename                     e_M (px)   e_M (cm)    e_M (%)
+---------------------------------------------------------------------------
+  1  slam_toolbox1_map.pgm              17.718     88.590       2.51
+  2  slam_toolbox2_map.pgm              22.462    112.312       3.18
+  3  slam_toolbox3_map.pgm              24.089    120.444       3.41
+  4  slam_toolbox4_map.pgm              22.596    112.982       3.20
+  5  slam_toolbox5_map.pgm              18.003     90.017       2.55
+  6  slam_toolbox6_map.pgm              19.479     97.396       2.75
+  7  slam_toolbox7_map.pgm              17.858     89.289       2.53
+  8  slam_toolbox8_map.pgm              18.650     93.248       2.64
+  9  slam_toolbox9_map.pgm              16.424     82.119       2.32
+ 10  slam_toolbox10_map.pgm             15.656     78.281       2.21
+---------------------------------------------------------------------------
+Mean e_M                                19.294     96.468
+Var(e_M)                                 7.207    180.167
+MSE(e_M^2)                             379.448   9486.196
+RMSE(e_M)                               19.479     97.397
+Corr(avg vs GT)                          0.169
+
+Algorithm    | Mean e_M (px) | Var(e_M) (px^2) | MSE(e_M^2) (px^2) | RMSE(e_M) (px) | Mean e_M (cm) | Var(e_M) (cm^2) | MSE(e_M^2) (cm^2) | RMSE(e_M) (cm) | Corr(avg vs GT)
+-------------+---------------+-----------------+-------------------+----------------+---------------+-----------------+-------------------+----------------+----------------
+SLAM Toolbox | 19.294        | 7.207           | 379.448           | 19.479         | 96.468        | 180.167         | 9486.196          | 97.397         | 0.169          
+Cartographer | 25.227        | 5.517           | 641.909           | 25.336         | 126.134       | 137.918         | 16047.729         | 126.680        | 0.246          
 
 * e_M is the map error computed using formula: e_M = (1/N) * Σ sqrt((x_i - x_i^GT)^2 + (y_i - y_i^GT)^2)
 * Scale used: 5.000 cm/pixel
-* MSE and Variance computed from the 10 individual run errors
+* MSE, RMSE, and Variance computed from the 10 individual run errors

@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import math
 import yaml
 import csv
 
@@ -70,7 +71,7 @@ def try_read_yaml_resolution(img_path):
     return None
 
 # ============================================================
-# 2) Alignment helpers (same logic as before)
+# 2) Alignment helpers
 # ============================================================
 
 def binarize(img):
@@ -336,7 +337,7 @@ def process_group(file_list, ref_gray, ref_bin, algo_name, prefix):
     print(f"\nProcessing {algo_name} maps...")
     for idx, path in enumerate(file_list):
         print(f"  [{algo_name}] Map {idx+1}/{len(file_list)}: {path}")
-        raw   = load_gray(path)
+        raw    = load_gray(path)
         canvas = fit_and_center_to_canvas(raw, (500, 500), bg=255)
         gray_norm, bin_norm, angle = normalize(canvas)
 
@@ -349,7 +350,7 @@ def process_group(file_list, ref_gray, ref_bin, algo_name, prefix):
         )
         bin_aligned = translate_image(best_bin, dx, dy, border=255)
 
-        # Save per-run aligned maps if you want to inspect them
+        # Save per-run aligned maps
         out_name = f"{prefix}_aligned_{idx+1}.png"
         cv2.imwrite(out_name, gray_aligned)
 
@@ -397,7 +398,7 @@ def build_overlay(gt_gray, algo_avg_gray, name):
     """
     Overlay ground-truth (red) and algorithm average map (green) for visualization.
     """
-    gt_c   = colorize(gt_gray, 2)      # red channel
+    gt_c   = colorize(gt_gray, 2)        # red channel
     algo_c = colorize(algo_avg_gray, 1)  # green channel
     overlay = cv2.addWeighted(gt_c, 0.6, algo_c, 0.6, 0)
     out_name = f"overlay_{name}_vs_groundtruth.png"
@@ -406,24 +407,28 @@ def build_overlay(gt_gray, algo_avg_gray, name):
 
 def compute_stats(errors_px, cm_per_px):
     """
-    Given array of e_M values (pixels), compute mean, variance, and MSE,
+    Given array of e_M values (pixels), compute mean, variance, MSE, RMSE,
     then convert to centimeters.
     """
     mean_px = float(np.mean(errors_px))
     var_px  = float(np.var(errors_px))
     mse_px  = float(np.mean(errors_px**2))
+    rmse_px = float(np.sqrt(mse_px))           # RMSE in pixels
 
     mean_cm = mean_px * cm_per_px
     var_cm  = var_px * (cm_per_px**2)
     mse_cm  = mse_px * (cm_per_px**2)
+    rmse_cm = float(np.sqrt(mse_cm))           # RMSE in cm
 
     return {
         "mean_px": mean_px,
         "var_px":  var_px,
         "mse_px":  mse_px,
+        "rmse_px": rmse_px,
         "mean_cm": mean_cm,
         "var_cm":  var_cm,
         "mse_cm":  mse_cm,
+        "rmse_cm": rmse_cm,
     }
 
 def format_table(rows, headers):
@@ -439,6 +444,91 @@ def format_table(rows, headers):
 # 6) Main
 # ============================================================
 
+def read_all_maps(drawn_filename, n_per_algo=10):
+    """
+    Helper to collect and validate all required map files:
+      - Ground truth (drawn) map
+      - Cartographer maps (cartographer1_map.pgm ... cartographerN_map.pgm)
+      - SLAM Toolbox maps (slam_toolbox1_map.pgm ... slam_toolboxN_map.pgm)
+
+    Returns:
+        drawn_filename (str)
+        cart_files (list[str])
+        slam_files (list[str])
+    """
+    # Check ground truth exists
+    if not os.path.exists(drawn_filename):
+        raise FileNotFoundError(f"Ground truth file not found: {drawn_filename}")
+
+    # Build Cartographer filenames and verify each exists
+    cart_files = [f"cartographer{i+1}_map.pgm" for i in range(n_per_algo)]
+    for f in cart_files:
+        if not os.path.exists(f):
+            raise FileNotFoundError(f"Missing Cartographer map: {f}")
+
+    # Build SLAM Toolbox filenames and verify each exists
+    slam_files = [f"slam_toolbox{i+1}_map.pgm" for i in range(n_per_algo)]
+    for f in slam_files:
+        if not os.path.exists(f):
+            raise FileNotFoundError(f"Missing SLAM Toolbox map: {f}")
+
+    print("\nGround truth map:")
+    print(f"  {drawn_filename}")
+    print("\nCartographer maps:")
+    for f in cart_files:
+        print(f"  {f}")
+    print("\nSLAM Toolbox maps:")
+    for f in slam_files:
+        print(f"  {f}")
+
+    return drawn_filename, cart_files, slam_files
+
+def format_per_run_table(algo_name, file_list, errors_px, cm_per_px, stats, corr, map_size_px=500):
+    """
+    Build a formatted text table showing per-run map errors for one algorithm.
+
+    algo_name  : "Cartographer" or "SLAM Toolbox"
+    file_list  : list of map filenames (same order as errors_px)
+    errors_px  : list/array of e_M values in pixels
+    cm_per_px  : scale (cm per pixel)
+    stats      : dict from compute_stats(...) with mean_px, var_px, mse_px, rmse_px, mean_cm, var_cm, mse_cm, rmse_cm
+    corr       : correlation between average map and ground truth (corr_avg)
+    map_size_px: assumed width/height of the resized maps (default 500x500)
+
+    % error here is defined as: e_M / diagonal * 100,
+    where diagonal = sqrt(map_size_px^2 + map_size_px^2)
+    """
+    header_lines = []
+    header_lines.append(f"=== PER-RUN MAP ERRORS: {algo_name.upper()} ===")
+    header_lines.append(f"Scale: {cm_per_px:.3f} cm/pixel")
+    header_lines.append("")
+
+    # Table header
+    lines = []
+    lines.append(f"{'Run':>3}  {'Map filename':<30} {'e_M (px)':>10} {'e_M (cm)':>10} {'e_M (%)':>10}")
+    lines.append("-" * 75)
+
+    # Max possible distance ~ diagonal of 500x500 map
+    diagonal_px = math.sqrt(map_size_px**2 + map_size_px**2)
+
+    for idx, (fname, e_px) in enumerate(zip(file_list, errors_px), start=1):
+        e_cm = e_px * cm_per_px
+        e_pct = (e_px / diagonal_px * 100.0) if diagonal_px > 0 else 0.0
+        base_name = os.path.basename(fname)
+        lines.append(
+            f"{idx:3d}  {base_name:<30} {e_px:10.3f} {e_cm:10.3f} {e_pct:10.2f}"
+        )
+
+    # Summary rows
+    lines.append("-" * 75)
+    lines.append(f"{'Mean e_M':<35} {stats['mean_px']:10.3f} {stats['mean_cm']:10.3f}")
+    lines.append(f"{'Var(e_M)':<35} {stats['var_px']:10.3f} {stats['var_cm']:10.3f}")
+    lines.append(f"{'MSE(e_M^2)':<35} {stats['mse_px']:10.3f} {stats['mse_cm']:10.3f}")
+    lines.append(f"{'RMSE(e_M)':<35} {stats['rmse_px']:10.3f} {stats['rmse_cm']:10.3f}")
+    lines.append(f"{'Corr(avg vs GT)':<35} {corr:10.3f}")
+
+    return "\n".join(header_lines + lines)
+
 def main():
     print("  Multi-Run Map Comparison, Alignment & Error Tool")
     print("---------------------------------------------------")
@@ -447,28 +537,15 @@ def main():
 
     # ---- Ground truth (drawn) ----
     drawn_name = input("Enter the filename for the Drawn (manual ground-truth) map: ").strip()
+
+    # Use helper to gather and validate all map filenames
+    drawn_name, cart_files, slam_files = read_all_maps(drawn_name, N_PER_ALGO)
+
+    # Preprocess the ground-truth map (center, normalize, etc.)
     drawn_500, drawn_rot, drawn_bin, drawn_ang = preprocess_ground_truth(drawn_name)
 
     # Try reading YAML resolution for ground truth
     drawn_mpp = try_read_yaml_resolution(drawn_name)
-
-    # ---- Cartographer map filenames ----
-    cart_files = []
-    print(f"\nEnter filenames for {N_PER_ALGO} Cartographer maps:")
-    for i in range(N_PER_ALGO):
-        fname = input(f"  Cartographer map #{i+1}: ").strip()
-        if not fname:
-            raise ValueError("Filename cannot be empty. Please rerun and provide all filenames.")
-        cart_files.append(fname)
-
-    # ---- SLAM Toolbox map filenames ----
-    slam_files = []
-    print(f"\nEnter filenames for {N_PER_ALGO} SLAM Toolbox maps:")
-    for i in range(N_PER_ALGO):
-        fname = input(f"  SLAM Toolbox map #{i+1}: ").strip()
-        if not fname:
-            raise ValueError("Filename cannot be empty. Please rerun and provide all filenames.")
-        slam_files.append(fname)
 
     # Read example YAML resolutions from the first map of each group (resolution is the same for all runs)
     cart_mpp = try_read_yaml_resolution(cart_files[0]) if cart_files else None
@@ -500,19 +577,48 @@ def main():
     cart_stats = compute_stats(cart_res["errors_px"], cm_per_px)
     slam_stats = compute_stats(slam_res["errors_px"], cm_per_px)
 
+    # ---- Print per-run tables (new feature) ----
+    cart_table = format_per_run_table(
+        algo_name="Cartographer",
+        file_list=cart_files,
+        errors_px=cart_res["errors_px"],
+        cm_per_px=cm_per_px,
+        stats=cart_stats,
+        corr=cart_res["corr_avg"],
+        map_size_px=drawn_bin.shape[0]
+    )
+
+    slam_table = format_per_run_table(
+        algo_name="SLAM Toolbox",
+        file_list=slam_files,
+        errors_px=slam_res["errors_px"],
+        cm_per_px=cm_per_px,
+        stats=slam_stats,
+        corr=slam_res["corr_avg"],
+        map_size_px=drawn_bin.shape[0]
+    )
+
+    print()
+    print(cart_table)
+    print()
+    print(slam_table)
+    print()
+
     # ---- Build overlays: average maps vs ground truth ----
     cart_overlay, cart_overlay_name = build_overlay(drawn_rot, cart_res["avg_gray"], "cartographer_avg")
     slam_overlay, slam_overlay_name = build_overlay(drawn_rot, slam_res["avg_gray"], "slam_avg")
 
-    # ---- Prepare table for console + file ----
+    # ---- Prepare summary table for console + file ----
     headers = [
         "Algorithm",
         "Mean e_M (px)",
         "Var(e_M) (px^2)",
         "MSE(e_M^2) (px^2)",
+        "RMSE(e_M) (px)",
         "Mean e_M (cm)",
         "Var(e_M) (cm^2)",
         "MSE(e_M^2) (cm^2)",
+        "RMSE(e_M) (cm)",
         "Corr(avg vs GT)"
     ]
 
@@ -522,9 +628,11 @@ def main():
             f"{slam_stats['mean_px']:.3f}",
             f"{slam_stats['var_px']:.3f}",
             f"{slam_stats['mse_px']:.3f}",
+            f"{slam_stats['rmse_px']:.3f}",
             f"{slam_stats['mean_cm']:.3f}",
             f"{slam_stats['var_cm']:.3f}",
             f"{slam_stats['mse_cm']:.3f}",
+            f"{slam_stats['rmse_cm']:.3f}",
             f"{slam_res['corr_avg']:.3f}",
         ],
         [
@@ -532,27 +640,31 @@ def main():
             f"{cart_stats['mean_px']:.3f}",
             f"{cart_stats['var_px']:.3f}",
             f"{cart_stats['mse_px']:.3f}",
+            f"{cart_stats['rmse_px']:.3f}",
             f"{cart_stats['mean_cm']:.3f}",
             f"{cart_stats['var_cm']:.3f}",
             f"{cart_stats['mse_cm']:.3f}",
+            f"{cart_stats['rmse_cm']:.3f}",
             f"{cart_res['corr_avg']:.3f}",
         ],
     ]
 
-    table_text = format_table(rows, headers)
     print("\n=== RESULTS OVER 10 RUNS PER ALGORITHM ===")
+    table_text = format_table(rows, headers)
     print(table_text)
     print(f"\n* e_M is the map error computed using formula: e_M = (1/N) * Σ sqrt((x_i - x_i^GT)^2 + (y_i - y_i^GT)^2)")
     print(f"* Scale used: {cm_per_px:.3f} cm/pixel")
-    print(f"* MSE and Variance computed from the {N_PER_ALGO} individual run errors")
+    print(f"* MSE, RMSE, and Variance computed from the {N_PER_ALGO} individual run errors")
 
-    # Save results to TXT and CSV for your poster / reports
+    # Save summary results
     with open("results_table.txt", "w") as f:
         f.write("Multi-run map comparison (10 runs each)\n\n")
+        f.write(cart_table + "\n\n")
+        f.write(slam_table + "\n\n")
         f.write(table_text)
         f.write(f"\n\n* e_M is the map error computed using formula: e_M = (1/N) * Σ sqrt((x_i - x_i^GT)^2 + (y_i - y_i^GT)^2)\n")
         f.write(f"* Scale used: {cm_per_px:.3f} cm/pixel\n")
-        f.write(f"* MSE and Variance computed from the {N_PER_ALGO} individual run errors\n")
+        f.write(f"* MSE, RMSE, and Variance computed from the {N_PER_ALGO} individual run errors\n")
 
     with open("results_table.csv", "w", newline="") as f:
         w = csv.writer(f)
@@ -560,21 +672,28 @@ def main():
         for r in rows:
             w.writerow(r)
 
-    # ---- Visual summary (plots) - ONLY showing overlays for inspection ----
-    # Two figures: Cartographer overlay and SLAM Toolbox overlay
-    
+    # Save per-run raw error values
+    with open("per_run_errors.csv", "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["Algorithm", "Run", "error_px", "error_cm"])
+        for i, e in enumerate(cart_res["errors_px"], start=1):
+            w.writerow(["Cartographer", i, f"{e:.6f}", f"{e * cm_per_px:.6f}"])
+        for i, e in enumerate(slam_res["errors_px"], start=1):
+            w.writerow(["SLAM Toolbox", i, f"{e:.6f}", f"{e * cm_per_px:.6f}"])
+
+    # ---- Visual Summary ----
     fig1, ax1 = plt.subplots(1, 1, figsize=(8, 8))
     ax1.imshow(cv2.cvtColor(cart_overlay, cv2.COLOR_BGR2RGB))
     ax1.set_title("Cartographer Average vs Ground Truth\n(Red=GT, Green=Cartographer)", fontsize=12)
     ax1.axis('off')
     plt.tight_layout()
-    
+
     fig2, ax2 = plt.subplots(1, 1, figsize=(8, 8))
     ax2.imshow(cv2.cvtColor(slam_overlay, cv2.COLOR_BGR2RGB))
     ax2.set_title("SLAM Toolbox Average vs Ground Truth\n(Red=GT, Green=SLAM)", fontsize=12)
     ax2.axis('off')
     plt.tight_layout()
-    
+
     plt.show()
 
     print("\nSaved files:")
@@ -588,6 +707,7 @@ def main():
     print(f" - {slam_overlay_name}")
     print(" - results_table.txt")
     print(" - results_table.csv")
+    print(" - per_run_errors.csv")
 
 if __name__ == "__main__":
     main()
