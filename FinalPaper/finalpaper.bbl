@@ -1,0 +1,26 @@
+\begin{thebibliography}{1}
+
+\bibitem{Li2024OrchardSLAM}
+Q.~Li and H.~Zhu.
+\newblock Performance evaluation of 2d lidar slam algorithms in simulated
+  orchard environments.
+\newblock {\em Computers and Electronics in Agriculture}, 218:108994, 2024.
+
+\bibitem{ROBOTIS_TB3_SlamTab}
+S.~Macenski.
+\newblock {\em SLAM Toolbox for ROS2: Installation and Usage Guide}, 2024.
+\newblock Accessed: 2025-02-02.
+
+\bibitem{ROBOTOIS_Cartographer}
+{ROBOTIS Co., Ltd.}
+\newblock {\em TurtleBot3: Cartographer SLAM Setup and Launch Instructions},
+  2024.
+\newblock Official online documentation for configuring and launching
+  Cartographer SLAM on TurtleBot3. Accessed: 2025-02-02.
+
+\bibitem{ROBOTIS_TB3_Features}
+{ROBOTIS Co., Ltd.}
+\newblock {\em TurtleBot3 Features}, 2024.
+\newblock Accessed: 2025-02-02.
+
+\end{thebibliography}
